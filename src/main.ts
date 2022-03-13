@@ -51,27 +51,35 @@ server.post(
     const { code, service } = parsed;
 
     // Check if the code is valid
-    if (!code || !code.match(/^[0-9]$/))
+    if (!code || !code.match(/^[0-9]+$/))
       return res.status(400).send("Invalid code");
 
     // Send the OTP to the machine
-    await got.post(`${process.env.CLIENT_URL}/otp/${code}`, {
-      headers: {
-        Authorization: `Bearer ${process.env.AUTH_TOKEN}`,
-      },
-    });
+    try {
+      await got.post(`${process.env.CLIENT_URL}/otp/${code}`, {
+        headers: {
+          Authorization: `Bearer ${process.env.AUTH_TOKEN}`,
+        },
+      });
+    } catch (err) {
+      console.error(err);
+    }
 
     // Send Telegram notification
     if (process.env.TG_TOKEN) {
-      await got.post(
-        `https://api.telegram.org/bot${process.env.TG_TOKEN}/sendMessage`,
-        {
-          json: {
-            chat_id: process.env.TG_CHAT_ID,
-            text: `${code}${service ? ` (${service})` : ""}`,
-          },
-        }
-      );
+      try {
+        await got.post(
+          `https://api.telegram.org/bot${process.env.TG_TOKEN}/sendMessage`,
+          {
+            json: {
+              chat_id: process.env.TG_CHAT_ID,
+              text: `${code}${service ? ` (${service})` : ""}`,
+            },
+          }
+        );
+      } catch (err) {
+        console.error(err);
+      }
     }
   }
 );
