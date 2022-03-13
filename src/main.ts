@@ -1,4 +1,5 @@
 import type { BodyParser } from "body-parser";
+import "dotenv/config.js";
 import express from "express";
 import got from "got";
 import notifier from "node-notifier";
