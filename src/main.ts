@@ -1,6 +1,6 @@
-import clipboard from "clipboardy";
-import "dotenv/config.js";
+import type { BodyParser } from "body-parser";
 import express from "express";
+import got from "got";
 import notifier from "node-notifier";
 import parse from "parse-otp-message";
 
@@ -11,44 +11,96 @@ interface ParsedMessage {
 
 const server = express();
 const port = Number(process.env.PORT) || 3000;
+let text: BodyParser["text"];
 
-server.get("/", (req, res) => {
+// Authenticate the request
+server.use((req, res, next) => {
+  if (req.method === "GET") return next();
+  if (
+    req.method === "POST" &&
+    req.headers.authorization !== `Bearer ${process.env.AUTH_TOKEN}`
+  )
+    return res.status(401).send("Unauthorized");
+  next();
+});
+
+server.get("*", (_req, res) => {
   res.send(
     "Thanks for dropping by! Visit https://github.com/plibither8/otp-forwarder for more info ;)"
   );
 });
 
-server.post("/otp", async (req, res) => {
-  const {
-    default: { text },
-  } = await import("body-parser");
-  await new Promise((resolve) => text()(req, res, resolve));
+// To be handled by server on the VPS
+server.post(
+  "/",
+  async (req, res, next) => {
+    if (!text)
+      ({
+        default: { text },
+      } = await import("body-parser"));
+    text()(req, res, next);
+  },
+  async (req, res) => {
+    if (process.env.IS_CLIENT)
+      return res.status(400).send("Route accessed from server only");
 
-  const { body, headers } = req;
-  if (headers.authorization !== process.env.AUTH_TOKEN) {
-    res.sendStatus(403);
-    return;
+    const parsed = parse(req.body) as ParsedMessage;
+    if (!parsed.code) return res.status(400).send("No OTP code found");
+
+    const { code, service } = parsed;
+
+    // Check if the code is valid
+    if (!code || !code.match(/^[0-9]$/))
+      return res.status(400).send("Invalid code");
+
+    // Send the OTP to the machine
+    await got.post(`${process.env.CLIENT_URL}/otp/${code}`, {
+      headers: {
+        Authorization: `Bearer ${process.env.AUTH_TOKEN}`,
+      },
+    });
+
+    // Send Telegram notification
+    if (process.env.TG_TOKEN) {
+      await got.post(
+        `https://api.telegram.org/bot${process.env.TG_TOKEN}/sendMessage`,
+        {
+          json: {
+            chat_id: process.env.TG_CHAT_ID,
+            text: `${code}${service ? ` (${service})` : ""}`,
+          },
+        }
+      );
+    }
   }
+);
 
-  const parsed = parse(body) as ParsedMessage;
-  if (parsed && parsed.code) {
+// To be handled by the client
+server.post("/otp/:code", async (req, res) => {
+  if (!process.env.IS_CLIENT)
+    return res.status(400).send("Route accessible from client only");
+
+  const { code } = req.params;
+
+  // Check if the code is valid
+  if (!code || !code.match(/^[0-9]$/))
+    return res.status(400).send("Invalid code");
+
+  // Notify on client machine
+  try {
     notifier.notify({
-      title: `SMS OTP - ${parsed.code}`,
-      message: `${parsed.code} is your OTP. Click to copy to clipboard.`,
-      icon: "Telegram Icon",
+      title: `SMS OTP - ${code}`,
+      message: `${code} is your OTP. Click to copy to clipboard.`,
       sound: true,
     });
-    return;
+  } catch (err) {
+    console.error(err);
+    return res.status(500).send("Error sending notification");
   }
 
-  res.end();
+  res.send(`Valid OTP: ${code}`);
 });
 
 server.listen(port, "0.0.0.0", () => {
   console.log("Server started at", `http://localhost:${port}`);
-});
-
-notifier.on("click", (_, { message }) => {
-  const otp = message.split(" is your OTP")[0];
-  clipboard.writeSync(otp);
 });
