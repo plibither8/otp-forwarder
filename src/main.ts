@@ -1,6 +1,6 @@
 import type { BodyParser } from "body-parser";
 import "dotenv/config.js";
-import express from "express";
+import express, { NextFunction, Request, Response } from "express";
 import got from "got";
 import notifier from "node-notifier";
 import parse from "parse-otp-message";
@@ -10,30 +10,22 @@ interface ParsedMessage {
   service?: string;
 }
 
+const CODE_REGEX = /^[0-9]+$/;
+
 const server = express();
 const port = Number(process.env.PORT) || 3000;
 let text: BodyParser["text"];
 
-// Authenticate the request
-server.use((req, res, next) => {
-  if (req.method === "GET") return next();
-  if (
-    req.method === "POST" &&
-    req.headers.authorization !== `Bearer ${process.env.AUTH_TOKEN}`
-  )
+const authGuard = (req: Request, res: Response, next: NextFunction) => {
+  if (req.headers.authorization !== `Bearer ${process.env.AUTH_TOKEN}`)
     return res.status(401).send("Unauthorized");
   next();
-});
-
-server.get("*", (_req, res) => {
-  res.send(
-    "Thanks for dropping by! Visit https://github.com/plibither8/otp-forwarder for more info ;)"
-  );
-});
+};
 
 // To be handled by server on the VPS
 server.post(
   "/",
+  authGuard,
   async (req, res, next) => {
     if (!text)
       ({
@@ -43,16 +35,13 @@ server.post(
   },
   async (req, res) => {
     if (process.env.IS_CLIENT)
-      return res.status(400).send("Route accessed from server only");
+      return res.status(400).send("Route accessible from server only");
 
-    const parsed = parse(req.body) as ParsedMessage;
-    if (!parsed.code) return res.status(400).send("No OTP code found");
-
-    const { code, service } = parsed;
+    const { code, service } = parse(req.body) as ParsedMessage;
+    if (!code) return res.status(400).send("No OTP code found");
 
     // Check if the code is valid
-    if (!code || !code.match(/^[0-9]+$/))
-      return res.status(400).send("Invalid code");
+    if (!code.match(CODE_REGEX)) return res.status(400).send("Invalid code");
 
     // Send the OTP to the machine
     try {
@@ -85,15 +74,14 @@ server.post(
 );
 
 // To be handled by the client
-server.post("/otp/:code", async (req, res) => {
+server.post("/otp/:code", authGuard, async (req, res) => {
   if (!process.env.IS_CLIENT)
     return res.status(400).send("Route accessible from client only");
 
   const { code } = req.params;
 
   // Check if the code is valid
-  if (!code || !code.match(/^[0-9]$/))
-    return res.status(400).send("Invalid code");
+  if (!code.match(CODE_REGEX)) return res.status(400).send("Invalid code");
 
   // Notify on client machine
   try {
@@ -108,6 +96,12 @@ server.post("/otp/:code", async (req, res) => {
   }
 
   res.send(`Valid OTP: ${code}`);
+});
+
+server.get("*", (_req, res) => {
+  res.send(
+    "Thanks for dropping by! Visit https://github.com/plibither8/otp-forwarder for more info ;)"
+  );
 });
 
 server.listen(port, "0.0.0.0", () => {
