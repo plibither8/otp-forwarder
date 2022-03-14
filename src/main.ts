@@ -1,4 +1,5 @@
 import type { BodyParser } from "body-parser";
+import clipboard from "clipboardy";
 import "dotenv/config.js";
 import express, { NextFunction, Request, Response } from "express";
 import got from "got";
@@ -21,6 +22,13 @@ const authGuard = (req: Request, res: Response, next: NextFunction) => {
     return res.status(401).send("Unauthorized");
   next();
 };
+
+// Setup notifier click handler
+if (process.env.IS_CLIENT)
+  notifier.on("click", (_, { message }) => {
+    const otp = message.split(" is your OTP")[0];
+    clipboard.writeSync(otp);
+  });
 
 // To be handled by server on the VPS
 server.post(
