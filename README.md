@@ -4,6 +4,6 @@
 
 ![Architecture](/etc/architecture.png)
 
-## LICENSE
+## License
 
 [MIT](LICENSE)
