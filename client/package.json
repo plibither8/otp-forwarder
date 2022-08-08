@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "nodemon",
     "build": "tsc && tsconfig-replace-paths --project tsconfig.json",
-    "start": "node dist/main",
+    "start": "node dist/client",
     "lint": "eslint --ext .ts src",
     "lint:fix": "eslint --ext .ts src --fix"
   },
