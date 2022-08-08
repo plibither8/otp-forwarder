@@ -1,0 +1,9 @@
+name = "otp-receiver"
+main = "index.ts"
+compatibility_date = "2022-08-08"
+
+[vars]
+CLIENT_URL = ""
+AUTH_TOKEN = ""
+TG_TOKEN = ""
+TG_CHAT_ID = ""
