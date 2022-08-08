@@ -9,11 +9,8 @@
     "sourceMap": true,
     "target": "es6",
     "baseUrl": ".",
-    "rootDir": "./src",
-    "paths": {
-      "src/*": ["./src/*"]
-    }
+    "rootDir": "./"
   },
   "lib": ["ESNext"],
-  "include": ["src/**/*.ts"]
+  "include": ["./**/*.ts"]
 }
